@@ -39,6 +39,32 @@ rules:
 - apiGroups:
   - adi.io.my.domain
   resources:
+  - agentserviceconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - adi.io.my.domain
+  resources:
+  - agentserviceconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - adi.io.my.domain
+  resources:
+  - agentserviceconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - adi.io.my.domain
+  resources:
   - installenvs
   verbs:
   - create
@@ -56,6 +82,54 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - hive.openshift.io
   resources:
@@ -82,3 +156,15 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - route.openshift.io
+  resources:
+  - routes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

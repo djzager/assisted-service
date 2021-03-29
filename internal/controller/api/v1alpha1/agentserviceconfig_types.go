@@ -24,9 +24,34 @@ import (
 
 // AgentServiceConfigSpec defines the desired state of AgentServiceConfig
 type AgentServiceConfigSpec struct {
+	// FileSystemStorage defines the spec of the PersistentVolumeClaim to be
+	// created for the assisted-service's filesystem (logs, etc).
+	// TODO(djzager) determine method for communicating guidelines
+	// for access modes, resources, and storageClass
 	FileSystemStorage corev1.PersistentVolumeClaimSpec `json:"filesystemStorage"`
-	DatabaseStorage   corev1.PersistentVolumeClaimSpec `json:"databaseStorage"`
+	// DatabaseStorage defines the spec of the PersistentVolumeClaim to be
+	// created for the database's filesystem.
+	// TODO(djzager) determine method for communicating guidelines
+	// for access modes, resources, and storageClass
+	DatabaseStorage corev1.PersistentVolumeClaimSpec `json:"databaseStorage"`
 }
+
+const (
+	// FilesystemStorageCreated reports whether the filesystem PVC has been created.
+	FilesystemStorageCreated conditionsv1.ConditionType = "FilesystemStorageCreated"
+	// DatabaseStorageCreated reports whether the database PVC has been created.
+	DatabaseStorageCreated conditionsv1.ConditionType = "DatabaseStorageCreated"
+	// AgentServiceCreated reports whether the assisted-service service was created.
+	AgentServiceCreated conditionsv1.ConditionType = "AgentServiceCreated"
+	// AgentRouteCreated reports whether the assisted-service route was created.
+	AgentRouteCreated conditionsv1.ConditionType = "AgentRouteCreated"
+	// DatabaseSecretCreated reports whether the database secret was created.
+	DatabaseSecretCreated conditionsv1.ConditionType = "DatabaseSecretCreated"
+	// ServiceDeploymentCreated reports whether the assisted-service deployment was created.
+	ServiceDeploymentCreated conditionsv1.ConditionType = "ServiceDeploymentCreated"
+	// DatabaseDeploymentCreated reports whether the database deployment was created.
+	DatabaseDeploymentCreated conditionsv1.ConditionType = "DatabaseDeploymentCreated"
+)
 
 // AgentServiceConfigStatus defines the observed state of AgentServiceConfig
 type AgentServiceConfigStatus struct {
