@@ -39,6 +39,32 @@ rules:
 - apiGroups:
   - adi.io.my.domain
   resources:
+  - agentserviceconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - adi.io.my.domain
+  resources:
+  - agentserviceconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - adi.io.my.domain
+  resources:
+  - agentserviceconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - adi.io.my.domain
+  resources:
   - installenvs
   verbs:
   - create

@@ -24,9 +24,22 @@ import (
 
 // AgentServiceConfigSpec defines the desired state of AgentServiceConfig
 type AgentServiceConfigSpec struct {
+	// FileSystemStorage defines the spec of the PersistentVolumeClaim to be
+	// created for the assisted-service's filesystem (logs, etc).
+	// TODO(djzager) determine method for communicating guidelines
+	// for access modes, resources, and storageClass
 	FileSystemStorage corev1.PersistentVolumeClaimSpec `json:"filesystemStorage"`
-	DatabaseStorage   corev1.PersistentVolumeClaimSpec `json:"databaseStorage"`
+	// DatabaseStorage defines the spec of the PersistentVolumeClaim to be
+	// created for the database's filesystem.
+	// TODO(djzager) determine method for communicating guidelines
+	// for access modes, resources, and storageClass
+	DatabaseStorage corev1.PersistentVolumeClaimSpec `json:"databaseStorage"`
 }
+
+const (
+	FilesystemStorageCondition conditionsv1.ConditionType = "FilesystemStorage"
+	DatabaseStorageCondition   conditionsv1.ConditionType = "DatabaseStorage"
+)
 
 // AgentServiceConfigStatus defines the observed state of AgentServiceConfig
 type AgentServiceConfigStatus struct {
