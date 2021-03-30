@@ -37,8 +37,20 @@ type AgentServiceConfigSpec struct {
 }
 
 const (
-	FilesystemStorageCondition conditionsv1.ConditionType = "FilesystemStorage"
-	DatabaseStorageCondition   conditionsv1.ConditionType = "DatabaseStorage"
+	// FilesystemStorageCreated reports whether the filesystem PVC has been created.
+	FilesystemStorageCreated conditionsv1.ConditionType = "FilesystemStorageCreated"
+	// DatabaseStorageCreated reports whether the database PVC has been created.
+	DatabaseStorageCreated conditionsv1.ConditionType = "DatabaseStorageCreated"
+	// AgentServiceCreated reports whether the assisted-service service was created.
+	AgentServiceCreated conditionsv1.ConditionType = "AgentServiceCreated"
+	// AgentRouteCreated reports whether the assisted-service route was created.
+	AgentRouteCreated conditionsv1.ConditionType = "AgentRouteCreated"
+	// DatabaseSecretCreated reports whether the database secret was created.
+	DatabaseSecretCreated conditionsv1.ConditionType = "DatabaseSecretCreated"
+	// ServiceDeploymentCreated reports whether the assisted-service deployment was created.
+	ServiceDeploymentCreated conditionsv1.ConditionType = "ServiceDeploymentCreated"
+	// DatabaseDeploymentCreated reports whether the database deployment was created.
+	DatabaseDeploymentCreated conditionsv1.ConditionType = "DatabaseDeploymentCreated"
 )
 
 // AgentServiceConfigStatus defines the observed state of AgentServiceConfig
