@@ -18,29 +18,25 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	// "sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	// "sigs.k8s.io/controller-runtime/pkg/source"
-
 	routev1 "github.com/openshift/api/route/v1"
 	adiiov1alpha1 "github.com/openshift/assisted-service/internal/controller/api/v1alpha1"
 	conditionsv1 "github.com/openshift/custom-resource-status/conditions/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -178,11 +174,11 @@ func (r *AgentServiceConfigReconciler) ensureStorage(ctx context.Context, instan
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("Creating PVC", "Namespace", pvc.Namespace, "Name", pvc.Name)
-			err := r.Client.Create(ctx, pvc)
-			if err != nil {
-				r.Log.Error(err, "Create PVC failed", "Namespace", pvc.Namespace, "Name", pvc.Name)
+			errCreate := r.Client.Create(ctx, pvc)
+			if errCreate != nil {
+				r.Log.Error(errCreate, "Create PVC failed", "Namespace", pvc.Namespace, "Name", pvc.Name)
 			}
-			return err
+			return nil
 		}
 		r.Log.Error(err, "Get PVC failed", "Namespace", pvc.Namespace, "Name", pvc.Name)
 		return err
@@ -198,15 +194,143 @@ func (r *AgentServiceConfigReconciler) ensureStorage(ctx context.Context, instan
 }
 
 func (r *AgentServiceConfigReconciler) ensureAgentService(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
-	return errors.New("Not implemented")
+	service := r.newAgentService(instance)
+	if err := controllerutil.SetControllerReference(instance, service, r.Scheme); err != nil {
+		return err
+	}
+
+	if err := r.ensureService(ctx, instance, service); err != nil {
+		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+			Type:    adiiov1alpha1.AgentServiceCreated,
+			Status:  corev1.ConditionFalse,
+			Reason:  "FailedCreate",
+			Message: "Failed to ensure agent service: " + err.Error(),
+		})
+		return err
+	}
+
+	conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+		Type:    adiiov1alpha1.AgentServiceCreated,
+		Status:  corev1.ConditionTrue,
+		Reason:  "ServiceCreated",
+		Message: "Agent service created",
+	})
+	return nil
+}
+
+func (r *AgentServiceConfigReconciler) ensureService(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig, service *corev1.Service) error {
+	found := &corev1.Service{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, found); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("Creating Service", "Namespace", service.Namespace, "Name", service.Name)
+			errCreate := r.Client.Create(ctx, service)
+			if errCreate != nil {
+				r.Log.Error(errCreate, "Create Service failed", "Namespace", service.Namespace, "Name", service.Name)
+			}
+			return nil
+		}
+		r.Log.Error(err, "Get Service failed", "Namespace", service.Namespace, "Name", service.Name)
+		return err
+	}
+
+	// TODO(djzager): Move to controllerutil.CreateOrupdate()
+	if !reflect.DeepEqual(service.Spec, found.Spec) {
+		found.Spec = service.Spec
+		return r.Client.Update(ctx, found)
+	}
+
+	return nil
 }
 
 func (r *AgentServiceConfigReconciler) ensureAgentRoute(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
-	return errors.New("Not implemented")
+	route := r.newAgentRoute(instance)
+	if err := controllerutil.SetControllerReference(instance, route, r.Scheme); err != nil {
+		return err
+	}
+
+	if err := r.ensureRoute(ctx, instance, route); err != nil {
+		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+			Type:    adiiov1alpha1.AgentRouteCreated,
+			Status:  corev1.ConditionFalse,
+			Reason:  "FailedCreate",
+			Message: "Failed to ensure agent route: " + err.Error(),
+		})
+		return err
+	}
+
+	conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+		Type:    adiiov1alpha1.AgentRouteCreated,
+		Status:  corev1.ConditionTrue,
+		Reason:  "RouteCreated",
+		Message: "Agent route created",
+	})
+	return nil
+}
+
+func (r *AgentServiceConfigReconciler) ensureRoute(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig, route *routev1.Route) error {
+	found := &routev1.Route{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: route.Name, Namespace: route.Namespace}, found); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("Creating route", "Namespace", route.Namespace, "Name", route.Name)
+			errCreate := r.Client.Create(ctx, route)
+			if errCreate != nil {
+				r.Log.Error(errCreate, "Create Route failed", "Namespace", route.Namespace, "Name", route.Name)
+			}
+			return nil
+		}
+		r.Log.Error(err, "Get Route failed", "Namespace", route.Namespace, "Name", route.Name)
+		return err
+	}
+
+	// TODO(djzager): Move to controllerutil.CreateOrupdate()
+	if !reflect.DeepEqual(route.Spec, found.Spec) {
+		found.Spec = route.Spec
+		return r.Client.Update(ctx, found)
+	}
+
+	return nil
 }
 
 func (r *AgentServiceConfigReconciler) ensurePostgresSecret(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
-	return errors.New("Not implemented")
+	secret := r.newPostgresSecret(instance)
+	if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
+		return err
+	}
+
+	if err := r.ensureSecret(ctx, instance, secret); err != nil {
+		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+			Type:    adiiov1alpha1.DatabaseSecretCreated,
+			Status:  corev1.ConditionFalse,
+			Reason:  "FailedCreate",
+			Message: "Failed to ensure postgres secret: " + err.Error(),
+		})
+		return err
+	}
+
+	conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+		Type:    adiiov1alpha1.DatabaseSecretCreated,
+		Status:  corev1.ConditionTrue,
+		Reason:  "SecretCreated",
+		Message: "Postgres secret created",
+	})
+	return nil
+}
+
+func (r *AgentServiceConfigReconciler) ensureSecret(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig, secret *corev1.Secret) error {
+	found := &corev1.Secret{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.Log.Info("Creating secret", "Namespace", secret.Namespace, "Name", secret.Name)
+			errCreate := r.Client.Create(ctx, secret)
+			if errCreate != nil {
+				r.Log.Error(errCreate, "Create Secret failed", "Namespace", secret.Namespace, "Name", secret.Name)
+			}
+			return nil
+		}
+		r.Log.Error(err, "Get Secret failed", "Namespace", secret.Namespace, "Name", secret.Name)
+		return err
+	}
+	return nil
 }
 
 func (r *AgentServiceConfigReconciler) ensureAssistedServiceDeployment(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
@@ -264,10 +388,10 @@ func (r *AgentServiceConfigReconciler) ensureDeployment(ctx context.Context, ins
 	if err := r.Client.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, found); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.Log.Info("Creating Deployment", "Namespace", deployment.Namespace, "Name", deployment.Name)
-			err := r.Client.Create(ctx, deployment)
-			if err != nil {
-				r.Log.Error(err, "Create deployment failed", "Namespace", deployment.Namespace, "Name", deployment.Name)
-				return err
+			errCreate := r.Client.Create(ctx, deployment)
+			if errCreate != nil {
+				r.Log.Error(errCreate, "Create deployment failed", "Namespace", deployment.Namespace, "Name", deployment.Name)
+				return errCreate
 			}
 			return nil
 		}
@@ -325,9 +449,9 @@ func (r *AgentServiceConfigReconciler) newAgentService(instance *adiiov1alpha1.A
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name: name,
-					Port: 8090,
-					Protocol: corev1.ProtocolTCP,
+					Name:       name,
+					Port:       8090,
+					Protocol:   corev1.ProtocolTCP,
 					TargetPort: intstr.FromInt(8090),
 				},
 			},
@@ -348,8 +472,8 @@ func (r *AgentServiceConfigReconciler) newAgentRoute(instance *adiiov1alpha1.Age
 		},
 		Spec: routev1.RouteSpec{
 			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: name,
+				Kind:   "Service",
+				Name:   name,
 				Weight: &weight,
 			},
 			Port: &routev1.RoutePort{
