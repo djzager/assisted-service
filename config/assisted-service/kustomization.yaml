@@ -4,7 +4,7 @@ resources:
 #- postgres-deployment.yaml
 #- assisted-service.yaml
 - assisted-service-configmap.yaml
-- assisted-service-service.yaml
+#- assisted-service-service.yaml
 - assisted-installer-sso.yaml
 #- deploy_ui.yaml
 - assisted-installer-local-auth.yaml

@@ -345,7 +345,7 @@ func (r *AgentServiceConfigReconciler) newAgentService(instance *adiiov1alpha1.A
 				Name:       name,
 				Port:       servicePort,
 				Protocol:   corev1.ProtocolTCP,
-				TargetPort: intstr.FromString(string(servicePort)),
+				TargetPort: intstr.FromInt(int(servicePort)),
 			},
 		},
 		Selector: map[string]string{
@@ -533,7 +533,7 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 			TimeoutSeconds:      3,
 			Handler: corev1.Handler{
 				TCPSocket: &corev1.TCPSocketAction{
-					Port: intstr.FromInt(8090),
+					Port: intstr.FromInt(int(servicePort)),
 				},
 			},
 		},
