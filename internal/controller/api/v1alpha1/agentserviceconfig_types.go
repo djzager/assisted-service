@@ -43,6 +43,8 @@ const (
 	DatabaseStorageCreated conditionsv1.ConditionType = "DatabaseStorageCreated"
 	// AgentServiceCreated reports whether the assisted-service service was created.
 	AgentServiceCreated conditionsv1.ConditionType = "AgentServiceCreated"
+	// DatabaseServiceCreated reports whether the database service was created.
+	DatabaseServiceCreated conditionsv1.ConditionType = "DatabaseServiceCreated"
 	// AgentRouteCreated reports whether the assisted-service route was created.
 	AgentRouteCreated conditionsv1.ConditionType = "AgentRouteCreated"
 	// DatabaseSecretCreated reports whether the database secret was created.

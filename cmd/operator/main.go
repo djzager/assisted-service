@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 
+	routev1 "github.com/openshift/api/route/v1"
 	adiiov1alpha1 "github.com/openshift/assisted-service/internal/controller/api/v1alpha1"
 	controllers "github.com/openshift/assisted-service/internal/controller/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -82,6 +83,8 @@ func main() {
 		setupLog.Error(fmt.Errorf("%s must be set", NamespaceEnvVar), "unable to get namespace")
 		os.Exit(1)
 	}
+
+	utilruntime.Must(routev1.AddToScheme(mgr.GetScheme()))
 
 	if err = (&controllers.AgentServiceConfigReconciler{
 		Client:    mgr.GetClient(),
