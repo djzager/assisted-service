@@ -86,11 +86,10 @@ func (r *AgentServiceConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 
 	instance := &adiiov1alpha1.AgentServiceConfig{}
 
-	// We only support one AgentServiceConfig per cluster, and it must be called "hive". This prevents installing
+	// We only support one AgentServiceConfig per cluster, and it must be called "agent". This prevents installing
 	// AgentService more than once in the cluster.
 	if req.NamespacedName.Name != agentServiceConfigName {
-		err := fmt.Errorf("Invalid name (%s) expected %s", req.NamespacedName.Name, agentServiceConfigName)
-		r.Log.Error(err, fmt.Sprintf("Only one AgentServiceConfig supported per cluster and must be named '%s'", agentServiceConfigName))
+		r.Log.Info(fmt.Sprintf("Invalid name (%s). Only one AgentServiceConfig supported per cluster and must be named '%s'", req.NamespacedName.Name, agentServiceConfigName))
 		return reconcile.Result{}, nil
 	}
 
@@ -312,6 +311,9 @@ func (r *AgentServiceConfigReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&adiiov1alpha1.AgentServiceConfig{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
+		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{}).
+		Owns(&routev1.Route{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
@@ -322,13 +324,15 @@ func (r *AgentServiceConfigReconciler) newFilesystemPVC(instance *adiiov1alpha1.
 			Name:      fmt.Sprintf("%s-filesystem", agentServiceConfigName),
 			Namespace: r.Namespace,
 		},
+		Spec: instance.Spec.FileSystemStorage,
 	}
 
 	mutateFn := func() error {
 		if err := controllerutil.SetControllerReference(instance, pvc, r.Scheme); err != nil {
 			return err
 		}
-		pvc.Spec = instance.Spec.FileSystemStorage
+		// Everything else is immutable once bound.
+		pvc.Spec.Resources.Requests = instance.Spec.DatabaseStorage.Resources.Requests
 		return nil
 	}
 
@@ -341,13 +345,15 @@ func (r *AgentServiceConfigReconciler) newDatabasePVC(instance *adiiov1alpha1.Ag
 			Name:      fmt.Sprintf("%s-database", agentServiceConfigName),
 			Namespace: r.Namespace,
 		},
+		Spec: instance.Spec.DatabaseStorage,
 	}
 
 	mutateFn := func() error {
 		if err := controllerutil.SetControllerReference(instance, pvc, r.Scheme); err != nil {
 			return err
 		}
-		pvc.Spec = instance.Spec.DatabaseStorage
+		// Everything else is immutable once bound.
+		pvc.Spec.Resources.Requests = instance.Spec.DatabaseStorage.Resources.Requests
 		return nil
 	}
 
@@ -359,31 +365,25 @@ func (r *AgentServiceConfigReconciler) newAgentService(instance *adiiov1alpha1.A
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: r.Namespace,
-			Labels: map[string]string{
-				"app": name,
-			},
 		},
-	}
-	svcSpec := corev1.ServiceSpec{
-		Ports: []corev1.ServicePort{
-			{
-				Name:       name,
-				Port:       servicePort,
-				Protocol:   corev1.ProtocolTCP,
-				TargetPort: intstr.FromInt(int(servicePort)),
-			},
-		},
-		Selector: map[string]string{
-			"app": name,
-		},
-		Type: corev1.ServiceTypeLoadBalancer,
 	}
 
 	mutateFn := func() error {
 		if err := controllerutil.SetControllerReference(instance, svc, r.Scheme); err != nil {
 			return err
 		}
-		svc.Spec = svcSpec
+		addAppLabel(name, &svc.ObjectMeta)
+		if len(svc.Spec.Ports) == 0 {
+			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{})
+		}
+		// For convenience targetPort, when unset, is set to the same as port
+		// https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service
+		// so we don't set it.
+		svc.Spec.Ports[0].Name = name
+		svc.Spec.Ports[0].Port = servicePort
+		svc.Spec.Ports[0].Protocol = corev1.ProtocolTCP
+		svc.Spec.Selector = map[string]string{"app": name}
+		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 		return nil
 	}
 
@@ -395,31 +395,25 @@ func (r *AgentServiceConfigReconciler) newPostgresService(instance *adiiov1alpha
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      postgresDeploymentName,
 			Namespace: r.Namespace,
-			Labels: map[string]string{
-				"app": postgresDeploymentName,
-			},
 		},
-	}
-	svcSpec := corev1.ServiceSpec{
-		Ports: []corev1.ServicePort{
-			{
-				Name:       postgresDeploymentName,
-				Port:       databasePort,
-				Protocol:   corev1.ProtocolTCP,
-				TargetPort: intstr.FromInt(int(databasePort)),
-			},
-		},
-		Selector: map[string]string{
-			"app": postgresDeploymentName,
-		},
-		Type: corev1.ServiceTypeLoadBalancer,
 	}
 
 	mutateFn := func() error {
 		if err := controllerutil.SetControllerReference(instance, svc, r.Scheme); err != nil {
 			return err
 		}
-		svc.Spec = svcSpec
+		addAppLabel(postgresDeploymentName, &svc.ObjectMeta)
+		if len(svc.Spec.Ports) == 0 {
+			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{})
+		}
+		// For convenience targetPort, when unset, is set to the same as port
+		// https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service
+		// so we don't set it.
+		svc.Spec.Ports[0].Name = postgresDeploymentName
+		svc.Spec.Ports[0].Port = databasePort
+		svc.Spec.Ports[0].Protocol = corev1.ProtocolTCP
+		svc.Spec.Selector = map[string]string{"app": postgresDeploymentName}
+		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
 		return nil
 	}
 
@@ -497,9 +491,8 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 	maxSurge := intstr.FromString("100%")
 
 	container := corev1.Container{
-		Name:            assistedServiceContainerName,
-		Image:           ServiceImage(),
-		ImagePullPolicy: corev1.PullAlways,
+		Name:  assistedServiceContainerName,
+		Image: ServiceImage(),
 		Ports: []corev1.ContainerPort{
 			{
 				ContainerPort: servicePort,
