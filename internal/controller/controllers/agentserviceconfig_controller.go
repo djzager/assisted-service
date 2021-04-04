@@ -52,7 +52,6 @@ const (
 	databasePort                  int32 = 5432
 	servicePort                   int32 = 8090
 	assistedServiceDeploymentName       = "assisted-service"
-	postgresDeploymentName              = databaseName
 
 	// assistedServiceContainerName is the Name property of the assisted-service container
 	assistedServiceContainerName string = "assisted-service"
@@ -102,10 +101,8 @@ func (r *AgentServiceConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		r.ensureFilesystemStorage,
 		r.ensureDatabaseStorage,
 		r.ensureAgentService,
-		r.ensurePostgresService,
 		r.ensureAgentRoute,
 		r.ensurePostgresSecret,
-		r.ensurePostgresDeployment,
 		r.ensureAssistedServiceDeployment,
 	} {
 		err := f(ctx, instance)
@@ -119,7 +116,13 @@ func (r *AgentServiceConfigReconciler) Reconcile(req ctrl.Request) (ctrl.Result,
 		}
 	}
 
-	return ctrl.Result{}, nil
+	conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
+		Type:    adiiov1alpha1.ConditionReconcileCompleted,
+		Status:  corev1.ConditionTrue,
+		Reason:  "ReconcileCompleted",
+		Message: "AgentServiceConfig reconcile completed without error.",
+	})
+	return ctrl.Result{}, r.Status().Update(ctx, instance)
 }
 
 func (r *AgentServiceConfigReconciler) ensureFilesystemStorage(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
@@ -127,7 +130,7 @@ func (r *AgentServiceConfigReconciler) ensureFilesystemStorage(ctx context.Conte
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.FilesystemStorageCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
 			Reason:  "StorageFailure",
 			Message: "Failed to ensure filesystem storage: " + err.Error(),
@@ -135,12 +138,6 @@ func (r *AgentServiceConfigReconciler) ensureFilesystemStorage(ctx context.Conte
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Filesystem storage created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.FilesystemStorageCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "StorageCreated",
-			Message: "Filesystem storage created",
-		})
 	}
 	return nil
 }
@@ -150,20 +147,14 @@ func (r *AgentServiceConfigReconciler) ensureDatabaseStorage(ctx context.Context
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseStorageCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
 			Reason:  "StorageFailure",
-			Message: "Failed to ensure filesystem storage: " + err.Error(),
+			Message: "Failed to ensure database storage: " + err.Error(),
 		})
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Database storage created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseStorageCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "StorageCreated",
-			Message: "Database storage created",
-		})
 	}
 	return nil
 }
@@ -173,43 +164,14 @@ func (r *AgentServiceConfigReconciler) ensureAgentService(ctx context.Context, i
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.AgentServiceCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
+			Reason:  "AgentServiceFailure",
 			Message: "Failed to ensure agent service: " + err.Error(),
 		})
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Agent service created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.AgentServiceCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "ServiceCreated",
-			Message: "Agent service created",
-		})
-	}
-	return nil
-}
-
-func (r *AgentServiceConfigReconciler) ensurePostgresService(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
-	svc, mutateFn := r.newPostgresService(instance)
-
-	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, mutateFn); err != nil {
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseServiceCreated,
-			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
-			Message: "Failed to ensure database service: " + err.Error(),
-		})
-		return err
-	} else if result != controllerutil.OperationResultNone {
-		r.Log.Info("Database service created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseServiceCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "ServiceCreated",
-			Message: "Database service created",
-		})
 	}
 	return nil
 }
@@ -219,20 +181,14 @@ func (r *AgentServiceConfigReconciler) ensureAgentRoute(ctx context.Context, ins
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, route, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.AgentRouteCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
+			Reason:  "AgentRouteFailure",
 			Message: "Failed to ensure agent route: " + err.Error(),
 		})
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Agent route created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.AgentRouteCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "RouteCreated",
-			Message: "Agent route created",
-		})
 	}
 	return nil
 }
@@ -242,20 +198,14 @@ func (r *AgentServiceConfigReconciler) ensurePostgresSecret(ctx context.Context,
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseSecretCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
+			Reason:  "PostgresSecretFailure",
 			Message: "Failed to ensure database secret: " + err.Error(),
 		})
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Database secret created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseSecretCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "SecretCreated",
-			Message: "Database secret created",
-		})
 	}
 	return nil
 }
@@ -265,43 +215,14 @@ func (r *AgentServiceConfigReconciler) ensureAssistedServiceDeployment(ctx conte
 
 	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, mutateFn); err != nil {
 		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.ServiceDeploymentCreated,
+			Type:    adiiov1alpha1.ConditionReconcileCompleted,
 			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
-			Message: "Failed to ensure assisted-service deployment: " + err.Error(),
+			Reason:  "DeploymentFailure",
+			Message: "Failed to ensure assisted service deployment: " + err.Error(),
 		})
 		return err
 	} else if result != controllerutil.OperationResultNone {
 		r.Log.Info("Assisted service deployment created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.ServiceDeploymentCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "DeploymentCreated",
-			Message: "Assisted service deployment created",
-		})
-	}
-	return nil
-}
-
-func (r *AgentServiceConfigReconciler) ensurePostgresDeployment(ctx context.Context, instance *adiiov1alpha1.AgentServiceConfig) error {
-	deployment, mutateFn := r.newPostgresDeployment(instance)
-
-	if result, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, mutateFn); err != nil {
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseDeploymentCreated,
-			Status:  corev1.ConditionFalse,
-			Reason:  "FailedCreate",
-			Message: "Failed to ensure database deployment: " + err.Error(),
-		})
-		return err
-	} else if result != controllerutil.OperationResultNone {
-		r.Log.Info("Database deployment created")
-		conditionsv1.SetStatusCondition(&instance.Status.Conditions, conditionsv1.Condition{
-			Type:    adiiov1alpha1.DatabaseDeploymentCreated,
-			Status:  corev1.ConditionTrue,
-			Reason:  "DeploymentCreated",
-			Message: "Database deployment created",
-		})
 	}
 	return nil
 }
@@ -390,36 +311,6 @@ func (r *AgentServiceConfigReconciler) newAgentService(instance *adiiov1alpha1.A
 	return svc, mutateFn
 }
 
-func (r *AgentServiceConfigReconciler) newPostgresService(instance *adiiov1alpha1.AgentServiceConfig) (*corev1.Service, controllerutil.MutateFn) {
-	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      postgresDeploymentName,
-			Namespace: r.Namespace,
-		},
-	}
-
-	mutateFn := func() error {
-		if err := controllerutil.SetControllerReference(instance, svc, r.Scheme); err != nil {
-			return err
-		}
-		addAppLabel(postgresDeploymentName, &svc.ObjectMeta)
-		if len(svc.Spec.Ports) == 0 {
-			svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{})
-		}
-		// For convenience targetPort, when unset, is set to the same as port
-		// https://kubernetes.io/docs/concepts/services-networking/service/#defining-a-service
-		// so we don't set it.
-		svc.Spec.Ports[0].Name = postgresDeploymentName
-		svc.Spec.Ports[0].Port = databasePort
-		svc.Spec.Ports[0].Protocol = corev1.ProtocolTCP
-		svc.Spec.Selector = map[string]string{"app": postgresDeploymentName}
-		svc.Spec.Type = corev1.ServiceTypeLoadBalancer
-		return nil
-	}
-
-	return svc, mutateFn
-}
-
 func (r *AgentServiceConfigReconciler) newAgentRoute(instance *adiiov1alpha1.AgentServiceConfig) (*routev1.Route, controllerutil.MutateFn) {
 	weight := int32(100)
 	route := &routev1.Route{
@@ -459,9 +350,14 @@ func (r *AgentServiceConfigReconciler) newPostgresSecret(instance *adiiov1alpha1
 		},
 	}
 
+	// pass, err := generatePassword()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
 	// TODO(djzager): Use legit password
 	secretData := map[string]string{
-		"db.host":     databaseName,
+		"db.host":     "localhost",
 		"db.user":     "admin",
 		"db.password": "abcdefg",
 		"db.name":     "installer",
@@ -490,7 +386,7 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 	maxUnavailable := intstr.FromString("50%")
 	maxSurge := intstr.FromString("100%")
 
-	container := corev1.Container{
+	serviceContainer := corev1.Container{
 		Name:  assistedServiceContainerName,
 		Image: ServiceImage(),
 		Ports: []corev1.ContainerPort{
@@ -501,11 +397,6 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 		},
 		Env: []corev1.EnvVar{
 			// TODO(djzager): clean up unneccessary environment variables
-			newSecretEnvVar("DB_HOST", "db.host", databaseSecretName),
-			newSecretEnvVar("DB_NAME", "db.name", databaseSecretName),
-			newSecretEnvVar("DB_PASS", "db.password", databaseSecretName),
-			newSecretEnvVar("DB_PORT", "db.port", databaseSecretName),
-			newSecretEnvVar("DB_USER", "db.user", databaseSecretName),
 			newSecretEnvVar("OCM_SERVICE_CLIENT_ID", "ocm-service.clientId", ocmSSOSecretName),
 			newSecretEnvVar("OCM_SERVICE_CLIENT_SECRET", "ocm-service.clientSecret", ocmSSOSecretName),
 			newSecretEnvVar("AWS_SECRET_ACCESS_KEY", "aws_secret_access_key", s3SecretName),
@@ -531,6 +422,13 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 			newEnvVar("STORAGE", "filesystem"),
 			newEnvVar("ISO_WORKSPACE_BASE_DIR", "/data"),
 			newEnvVar("ISO_CACHE_DIR", "/data/cache"),
+
+			// database
+			newSecretEnvVar("DB_HOST", "db.host", databaseSecretName),
+			newSecretEnvVar("DB_NAME", "db.name", databaseSecretName),
+			newSecretEnvVar("DB_PASS", "db.password", databaseSecretName),
+			newSecretEnvVar("DB_PORT", "db.port", databaseSecretName),
+			newSecretEnvVar("DB_USER", "db.user", databaseSecretName),
 
 			// image overrides
 			newEnvVar("AGENT_DOCKER_IMAGE", AgentImage()),
@@ -586,12 +484,54 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 		},
 	}
 
+	postgresContainer := corev1.Container{
+		Name:            databaseContainerName,
+		Image:           DatabaseImage(),
+		ImagePullPolicy: corev1.PullIfNotPresent,
+		Ports: []corev1.ContainerPort{
+			{
+				Name:          databaseName,
+				ContainerPort: databasePort,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		},
+		Env: []corev1.EnvVar{
+			newSecretEnvVar("POSTGRESQL_DATABASE", "db.name", databaseSecretName),
+			newSecretEnvVar("POSTGRESQL_USER", "db.user", databaseSecretName),
+			newSecretEnvVar("POSTGRESQL_PASSWORD", "db.password", databaseSecretName),
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "postgresdb",
+				MountPath: "/var/lib/pgsql/data",
+			},
+		},
+		Resources: corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    *resource.NewMilliQuantity(200, resource.DecimalSI),
+				corev1.ResourceMemory: *resource.NewQuantity(500*1024*1024, resource.BinarySI),
+			},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
+				corev1.ResourceMemory: *resource.NewQuantity(400*1024*1024, resource.BinarySI),
+			},
+		},
+	}
+
 	volumes := []corev1.Volume{
 		{
 			Name: "bucket-filesystem",
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 					ClaimName: filesystemPVCName,
+				},
+			},
+		},
+		{
+			Name: "postgresdb",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: databasePVCName,
 				},
 			},
 		},
@@ -634,95 +574,11 @@ func (r *AgentServiceConfigReconciler) newAssistedServiceDeployment(instance *ad
 		var replicas int32 = 1
 		deployment.Spec.Replicas = &replicas
 		deployment.Spec.Strategy = deploymentStrategy
-		deployment.Spec.Template.Spec.Containers = []corev1.Container{container}
+		deployment.Spec.Template.Spec.Containers = []corev1.Container{serviceContainer, postgresContainer}
 		deployment.Spec.Template.Spec.Volumes = volumes
 
 		return nil
 	}
-	return deployment, mutateFn
-}
-
-func (r *AgentServiceConfigReconciler) newPostgresDeployment(instance *adiiov1alpha1.AgentServiceConfig) (*appsv1.Deployment, controllerutil.MutateFn) {
-
-	container := corev1.Container{
-		Name:            databaseContainerName,
-		Image:           DatabaseImage(),
-		ImagePullPolicy: corev1.PullIfNotPresent,
-		Ports: []corev1.ContainerPort{
-			{
-				Name:          databaseName,
-				ContainerPort: databasePort,
-				Protocol:      corev1.ProtocolTCP,
-			},
-		},
-		Env: []corev1.EnvVar{
-			newSecretEnvVar("POSTGRESQL_DATABASE", "db.name", databaseSecretName),
-			newSecretEnvVar("POSTGRESQL_USER", "db.user", databaseSecretName),
-			newSecretEnvVar("POSTGRESQL_PASSWORD", "db.password", databaseSecretName),
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
-				Name:      "postgresdb",
-				MountPath: "/var/lib/pgsql/data",
-			},
-		},
-		Resources: corev1.ResourceRequirements{
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    *resource.NewMilliQuantity(200, resource.DecimalSI),
-				corev1.ResourceMemory: *resource.NewQuantity(500*1024*1024, resource.BinarySI),
-			},
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    *resource.NewMilliQuantity(100, resource.DecimalSI),
-				corev1.ResourceMemory: *resource.NewQuantity(400*1024*1024, resource.BinarySI),
-			},
-		},
-	}
-
-	volume := corev1.Volume{
-		Name: "postgresdb",
-		VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: databasePVCName,
-			},
-		},
-	}
-
-	deploymentLabels := map[string]string{
-		"app": postgresDeploymentName,
-	}
-
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      databaseContainerName,
-			Namespace: r.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: deploymentLabels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: deploymentLabels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{},
-				},
-			},
-		},
-	}
-
-	mutateFn := func() error {
-		if err := controllerutil.SetControllerReference(instance, deployment, r.Scheme); err != nil {
-			return err
-		}
-		var replicas int32 = 1
-		deployment.Spec.Replicas = &replicas
-		deployment.Spec.Template.Spec.Containers = []corev1.Container{container}
-		deployment.Spec.Template.Spec.Volumes = []corev1.Volume{volume}
-
-		return nil
-	}
-
 	return deployment, mutateFn
 }
 
