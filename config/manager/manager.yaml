@@ -27,7 +27,7 @@ spec:
         - /assisted-service-operator
         args:
         - --leader-elect
-        image: quay.io/rwsu/assisted-service:latest
+        image: quay.io/ocpmetal/assisted-service:latest
         name: manager
         env:
           - name: NAMESPACE
