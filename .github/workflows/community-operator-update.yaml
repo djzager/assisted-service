@@ -1,0 +1,29 @@
+name: Release to community-operators
+on:
+  # manual trigger if required
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Manually specify the operator version in SemVer format (ie. x.y.z)'
+        required: true
+  schedule:
+    - cron: "0 23 * * 4" # Run at 2300 every Thursday
+
+jobs:
+  build:
+    runs-on: ubuntu-20.latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Install yq
+        run: |
+          wget https://github.com/mikefarah/yq/releases/download/v4.9.6/yq_linux_amd64 -O /usr/bin/yq && \
+            chmod +x /usr/bin/yq
+      - name: Release community operator PRs
+        run: |
+          git config --global user.name "David Zager"
+          git config --global user.email "dzager@redhat.com"
+          export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          ./hack/operator-release.sh
+          
