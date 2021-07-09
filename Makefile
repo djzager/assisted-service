@@ -127,6 +127,13 @@ endif
 	skipper $(MAKE) generate-all
 	git diff --exit-code  # this will fail if generate-all caused any diff
 
+swagger-lint:
+ifeq (, $(shell which spectral &> /dev/null))
+	docker run --rm -it docker.io/stoplight/spectral:latest lint swagger.yaml
+else
+	spectral lint swagger.yaml
+endif
+
 lint:
 	golangci-lint run -v
 

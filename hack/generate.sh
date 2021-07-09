@@ -7,10 +7,6 @@ set -o errexit
 __dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 __root="$(cd "$(dirname "${__dir}")" && pwd)"
 
-function lint_swagger() {
-    spectral lint swagger.yaml
-}
-
 function generate_go_server() {
     rm -rf restapi
     docker run -u $(id -u):$(id -u) -v ${__root}:${__root}:rw,Z -v /etc/passwd:/etc/passwd -w ${__root} \
@@ -52,8 +48,6 @@ function generate_keys() {
 }
 
 function generate_from_swagger() {
-    #TODO: Add this back when https://github.com/stoplightio/spectral/issues/1745 is resolved
-    #lint_swagger
     generate_go_client
     generate_go_server
 }
